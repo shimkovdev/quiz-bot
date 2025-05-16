@@ -70,15 +70,9 @@ bot.action(/ANS_(.+)/, async ctx => {
   const score = results.filter(r => r.answer === r.correct).length;
 
   const summary = results.map(r =>
-    `❓ ${r.question}
-✅ ${r.correct}
-📝 ${r.answer}`
-  ).join('
-
-') +
-    `
-
-🎉 Вы ответили правильно на ${score} из ${results.length}`;
+  `❓ ${r.question}\n✅ ${r.correct}\n📝 ${r.answer}`
+).join('\n\n') +
+`\n\n🎉 Вы ответили правильно на ${score} из ${results.length}`;
 
   await ctx.editMessageText(summary);
 
