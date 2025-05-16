@@ -5,7 +5,6 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID);
 
-const { GoogleSpreadsheet } = require('google-spreadsheet');
 console.log('google-spreadsheet version:', require('google-spreadsheet/package.json').version);
 
 
