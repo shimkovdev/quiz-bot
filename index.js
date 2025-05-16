@@ -6,14 +6,16 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID);
 
-async function loadQuiz() {
-  // Аутентификация сервисным аккаунтом (записи в google-spreadsheet@3.3.0)
+// Аутентификация один раз при запуске
+async function authorizeGoogleSheet() {
   await doc.useServiceAccountAuth({
     client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\n/g, '\n'),
+    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'), // Дважды экранированные \n из .env
   });
   await doc.loadInfo();
+}
 
+async function loadQuiz() {
   const sheetQ = doc.sheetsByTitle['Вопросы'];
   const rows = await sheetQ.getRows();
 
@@ -38,9 +40,14 @@ bot.start(ctx => {
 });
 
 bot.action('START', async ctx => {
-  const quiz = await loadQuiz();
-  sessions[ctx.from.id] = { quiz, index: 0, answers: [] };
-  sendQuestion(ctx);
+  try {
+    const quiz = await loadQuiz();
+    sessions[ctx.from.id] = { quiz, index: 0, answers: [] };
+    sendQuestion(ctx);
+  } catch (err) {
+    console.error('Ошибка при загрузке викторины:', err);
+    ctx.reply('Ошибка при загрузке опроса. Попробуйте позже.');
+  }
 });
 
 function sendQuestion(ctx) {
@@ -70,21 +77,23 @@ bot.action(/ANS_(.+)/, async ctx => {
   const score = results.filter(r => r.answer === r.correct).length;
 
   const summary = results.map(r =>
-  `❓ ${r.question}\n✅ ${r.correct}\n📝 ${r.answer}`
-).join('\n\n') +
-`\n\n🎉 Вы ответили правильно на ${score} из ${results.length}`;
+    `❓ ${r.question}\n✅ ${r.correct}\n📝 ${r.answer}`
+  ).join('\n\n') +
+    `\n\n🎉 Вы ответили правильно на ${score} из ${results.length}`;
 
   await ctx.editMessageText(summary);
 
-  // Запись результатов
-  const sheetR = doc.sheetsByTitle['Опрос'];
-  await sheetR.addRow([
-    ctx.from.username || id,
-    ...session.answers,
-    `${score}/${results.length}`
-  ]);
+  try {
+    const sheetR = doc.sheetsByTitle['Опрос'];
+    await sheetR.addRow([
+      ctx.from.username || id,
+      ...session.answers,
+      `${score}/${results.length}`
+    ]);
+  } catch (err) {
+    console.error('Ошибка записи результатов:', err);
+  }
 
-  // Уведомление владельца
   await bot.telegram.sendMessage(
     process.env.RESULTS_CHAT_ID,
     `Пользователь ${ctx.from.username} завершил опрос: ${score}/${results.length}`
@@ -93,4 +102,15 @@ bot.action(/ANS_(.+)/, async ctx => {
   delete sessions[id];
 });
 
-bot.launch();
+// Запуск бота после авторизации
+(async () => {
+  try {
+    await authorizeGoogleSheet();
+    console.log('Авторизация Google Sheets успешна');
+    bot.launch();
+    console.log('Бот запущен');
+  } catch (err) {
+    console.error('Ошибка инициализации бота:', err);
+  }
+})();
+
