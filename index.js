@@ -2,11 +2,9 @@ require('dotenv').config();
 const { Telegraf, Markup } = require('telegraf');
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 
-// Инициализация бота
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID);
 
-// Авторизация через Google Service Account
 async function authorizeGoogleSheet() {
   await doc.useServiceAccountAuth({
     client_email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -31,7 +29,6 @@ async function loadQuiz() {
   }));
 }
 
-// Хранилище сессий
 const sessions = {};
 
 bot.start(ctx => {
@@ -78,21 +75,23 @@ bot.action(/ANS_(.+)/, async ctx => {
   await ctx.editMessageText(summary);
 
   const sheetR = doc.sheetsByTitle['Опрос'];
-  await sheetR.addRow([
-    ctx.from.username || id,
-    ...session.answers,
-    `${score}/${results.length}`
-  ]);
+  await sheetR.addRow({
+    'Пользователь': ctx.from.username || id,
+    ...session.answers.reduce((acc, ans, idx) => {
+      acc[`Ответ ${idx + 1}`] = ans;
+      return acc;
+    }, {}),
+    'Результат': `${score}/${results.length}`
+  });
 
   await bot.telegram.sendMessage(
     process.env.RESULTS_CHAT_ID,
-    `Пользователь ${ctx.from.username} завершил опрос: ${score}/${results.length}`
+    `Пользователь ${ctx.from.username || id} завершил опрос: ${score}/${results.length}`
   );
 
   delete sessions[id];
 });
 
-// Инициализация и запуск бота
 (async () => {
   try {
     await authorizeGoogleSheet();
