@@ -10,8 +10,7 @@ async function loadQuiz() {
   // Аутентификация сервисным аккаунтом (записи в google-spreadsheet@3.3.0)
   await doc.useServiceAccountAuth({
     client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\n/g, '
-'),
+    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\n/g, '\n'),
   });
   await doc.loadInfo();
 
