@@ -7,12 +7,18 @@ const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID);
 
 
 async function authorizeGoogleSheet() {
-  await doc.useServiceAccountAuth({
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-  });
-  await doc.loadInfo();
-}
+   // Аутентификация через google-auth-library JWT
+   const { JWT } = require('google-auth-library');
+   const authClient = new JWT({
+     email: process.env.GOOGLE_CLIENT_EMAIL,
+     key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+     scopes: ['https://www.googleapis.com/auth/spreadsheets']
+   });
+   await authClient.authorize();
+   // Передаём OAuth2-клиент в google-spreadsheet
+   doc.useOAuth2Client(authClient);
+   await doc.loadInfo();
+ }
 
 // Загрузка викторины
 async function loadQuiz() {
