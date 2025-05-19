@@ -73,43 +73,42 @@ bot.action('START', async ctx => {
   }
 });
 
+// После старта или после каждого ответа:
 function sendQuestion(ctx) {
   const s = sessions[ctx.from.id];
   const qObj = s.quiz[s.index];
-  s.currentOptions = qObj.options;
 
-  // Собираем текст с вариантами:
-  const textWithOptions = [
+  // Формируем обычные кнопки (каждая — одна строка)
+  const keyboard = qObj.options.map(opt => [ opt ]);
+
+  // Отправляем вопрос вместе с Reply Keyboard
+  ctx.reply(
     qObj.text,
-    '',  // пустая строка для отступа
-    ...qObj.options.map((opt, i) => `${i+1}. ${opt}`)
-  ].join('\n');
-
-  // Кнопки с короткими метками 1,2,3… в столбец
-  const buttons = qObj.options.map((_, idx) =>
-    Markup.button.callback(
-      String(idx+1),       // на кнопке — просто цифра
-      `ANS_${s.index}_${idx}`
-    )
-  );
-
-  return ctx.editMessageText(
-    textWithOptions,
-    Markup.inlineKeyboard(buttons.map(b => [b]))
+    Markup.keyboard(keyboard)
+      .oneTime()        // клавиатура исчезнет после выбора
+      .resize()         // подгонит размер
   );
 }
 
-bot.action(/ANS_(\d+)_(\d+)/, async ctx => {
-  const [, qIdxStr, optIdxStr] = ctx.match;
-  const qIdx = Number(qIdxStr), optIdx = Number(optIdxStr);
-  const s = sessions[ctx.from.id];
-  s.answers[qIdx] = s.currentOptions[optIdx];
+// Вместо bot.action — используем bot.on('text')
+// (но игнорируем команду /start)
+bot.on('text', async (ctx) => {
+  const userId = ctx.from.id;
+  const s = sessions[userId];
+  if (!s) return;                      // если нет активной сессии — игнор
+
+  const answer = ctx.message.text;     // полный текст варианта
+  s.answers[s.index] = answer;
   s.index++;
+
+  // Убираем Reply Keyboard
+  await ctx.reply('Ваш ответ принят', Markup.removeKeyboard());
 
   if (s.index < s.quiz.length) {
     return sendQuestion(ctx);
   }
-  // Итоги
+
+  // Если вопросов больше нет — подводим итоги
   const results = s.quiz.map((q, i) => ({
     question: q.text,
     correct: q.correct,
@@ -118,18 +117,18 @@ bot.action(/ANS_(\d+)_(\d+)/, async ctx => {
   const score = results.filter(r => r.answer === r.correct).length;
   const summary = results.map(r =>
     `❓ ${r.question}\n✅ ${r.correct}\n📝 ${r.answer}`
-  ).join('\n\n') + `\n\n🎉 Вы ответили правильно на ${score}/${results.length}`;
+  ).join('\n\n') + `\n\n🎉 Правильно: ${score}/${results.length}`;
 
-  await ctx.editMessageText(summary);
+  await ctx.reply(summary);
 
-  const username = ctx.from.username || ctx.from.id;
+  // Сохраняем результаты и уведомляем
+  const username = ctx.from.username || userId;
   await saveResults(username, s.answers, `${score}/${results.length}`);
   await bot.telegram.sendMessage(
     process.env.RESULTS_CHAT_ID,
     `Пользователь ${username} завершил опрос: ${score}/${results.length}`
   );
-
-  delete sessions[ctx.from.id];
+  delete sessions[userId];
 });
 
 (async () => {
