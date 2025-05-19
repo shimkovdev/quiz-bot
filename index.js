@@ -18,7 +18,7 @@ async function authorize() {
   await jwtClient.authorize();
 }
 
-// Загрузка викторины
+// Загрузка викторины из листа "Вопросы"
 async function loadQuiz() {
   const { data } = await sheetsApi.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -27,14 +27,19 @@ async function loadQuiz() {
   const rows = data.values || [];
   if (rows.length < 2) throw new Error('Недостаточно данных в листе "Вопросы"');
 
-  const header = rows[0];
-  const corrects = rows[1];
-  const optionsRows = rows.slice(2);
+  const header = rows[0];         // первая строка — тексты вопросов
+  const allAnswers = rows.slice(1); // со второй строки — все варианты
+
+  // считаем, что первая строка из allAnswers (rows[1]) — это правильные ответы
+  const corrects = allAnswers[0];
+  const optionsRows = allAnswers.slice(1);
 
   return header.map((q, i) => ({
     text: q,
-    correct: corrects[i] || '',
+    // собираем все варианты: из rows[2], rows[3] и т.д.
     options: optionsRows.map(r => r[i]).filter(Boolean),
+    // правильный ответ берём из строки corrects
+    correct: corrects[i] || ''
   }));
 }
 
@@ -71,26 +76,39 @@ bot.action('START', async ctx => {
 function sendQuestion(ctx) {
   const s = sessions[ctx.from.id];
   const qObj = s.quiz[s.index];
-  // Запоминаем длинные тексты
   s.currentOptions = qObj.options;
-  const buttons = qObj.options.map((opt, idx) =>
-    Markup.button.callback(opt, `ANS_${s.index}_${idx}`)
+
+  // Собираем текст с вариантами:
+  const textWithOptions = [
+    qObj.text,
+    '',  // пустая строка для отступа
+    ...qObj.options.map((opt, i) => `${i+1}. ${opt}`)
+  ].join('\n');
+
+  // Кнопки с короткими метками 1,2,3… в столбец
+  const buttons = qObj.options.map((_, idx) =>
+    Markup.button.callback(
+      String(idx+1),       // на кнопке — просто цифра
+      `ANS_${s.index}_${idx}`
+    )
   );
-  ctx.editMessageText(qObj.text, Markup.inlineKeyboard(buttons));
+
+  return ctx.editMessageText(
+    textWithOptions,
+    Markup.inlineKeyboard(buttons.map(b => [b]))
+  );
 }
 
 bot.action(/ANS_(\d+)_(\d+)/, async ctx => {
-  const [ , qIdxStr, optIdxStr ] = ctx.match;
+  const [, qIdxStr, optIdxStr] = ctx.match;
   const qIdx = Number(qIdxStr), optIdx = Number(optIdxStr);
   const s = sessions[ctx.from.id];
-  // Достаём полный текст ответа
   s.answers[qIdx] = s.currentOptions[optIdx];
   s.index++;
 
   if (s.index < s.quiz.length) {
     return sendQuestion(ctx);
   }
-
   // Итоги
   const results = s.quiz.map((q, i) => ({
     question: q.text,
