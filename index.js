@@ -15,7 +15,7 @@ async function authorizeGoogleSheet() {
   }
   key = key.replace(/\r/g, '');
   // Преобразуем \\n в реальные переводы строк
-  const privateKey = key.replace(/\\n/g, '\n');
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
 
   const authClient = new JWT({
     email: process.env.GOOGLE_CLIENT_EMAIL,
