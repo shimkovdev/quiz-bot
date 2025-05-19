@@ -1,11 +1,12 @@
 require('dotenv').config();
 const { Telegraf, Markup } = require('telegraf');
 const { google } = require('googleapis');
+const express = require('express');
 
-// Инициализация бота
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
+const app = express();
 
-// Настройка Google Sheets через JWT
+// Настройка Google Sheets
 const jwtClient = new google.auth.JWT(
   process.env.GOOGLE_CLIENT_EMAIL,
   null,
@@ -34,14 +35,13 @@ async function loadQuiz() {
   const rows = data.values || [];
   if (rows.length < 3) throw new Error('Недостаточно строк в листе "Вопросы"');
 
-  const questions = rows[0];     // строка с текстами вопросов
-  const corrects = rows[1];      // строка с правильными вариантами
-  const optionsRows = rows.slice(2); // строки с вариантами
+  const questions = rows[0];
+  const corrects = rows[1];
+  const optionsRows = rows.slice(2);
 
   const quiz = questions.map((q, i) => {
     const allOptions = optionsRows.map(row => row[i]).filter(Boolean);
     const correct = corrects[i];
-
     const shuffled = shuffle(allOptions);
     return {
       text: q,
@@ -50,11 +50,9 @@ async function loadQuiz() {
     };
   });
 
-  return shuffle(quiz); // перемешиваем порядок вопросов
+  return shuffle(quiz);
 }
 
-
-// Сохранение результатов
 async function saveResults(username, answers, scoreStr) {
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -84,42 +82,32 @@ bot.action('START', async ctx => {
   }
 });
 
-// После старта или после каждого ответа:
 function sendQuestion(ctx) {
   const s = sessions[ctx.from.id];
   const qObj = s.quiz[s.index];
-
-  // Формируем обычные кнопки (каждая — одна строка)
-  const keyboard = qObj.options.map(opt => [ opt ]);
-
-  // Отправляем вопрос вместе с Reply Keyboard
+  const keyboard = qObj.options.map(opt => [opt]);
   ctx.reply(
     qObj.text,
-    Markup.keyboard(keyboard)
-      .oneTime()        // клавиатура исчезнет после выбора
-      .resize()         // подгонит размер
+    Markup.keyboard(keyboard).oneTime().resize()
   );
 }
 
-// Вместо bot.action — используем bot.on('text')
-// (но игнорируем команду /start)
 bot.on('text', async (ctx) => {
+  if (ctx.message.text.startsWith('/')) return;
   const userId = ctx.from.id;
   const s = sessions[userId];
-  if (!s) return;                      // если нет активной сессии — игнор
+  if (!s) return;
 
-  const answer = ctx.message.text;     // полный текст варианта
+  const answer = ctx.message.text;
   s.answers[s.index] = answer;
   s.index++;
 
-  // Убираем Reply Keyboard
   await ctx.reply('Ваш ответ принят', Markup.removeKeyboard());
 
   if (s.index < s.quiz.length) {
     return sendQuestion(ctx);
   }
 
-  // Если вопросов больше нет — подводим итоги
   const results = s.quiz.map((q, i) => ({
     question: q.text,
     correct: q.correct,
@@ -132,7 +120,6 @@ bot.on('text', async (ctx) => {
 
   await ctx.reply(summary);
 
-  // Сохраняем результаты и уведомляем
   const username = ctx.from.username || userId;
   await saveResults(username, s.answers, `${score}/${results.length}`);
   await bot.telegram.sendMessage(
@@ -142,13 +129,22 @@ bot.on('text', async (ctx) => {
   delete sessions[userId];
 });
 
+// === Express-сервер для вебхука ===
+const PORT = process.env.PORT || 3000;
+
+app.use(bot.webhookCallback('/bot'));
+bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/bot`);
+
+app.get('/', (req, res) => res.send('Бот работает'));
+
 (async () => {
   try {
     await authorize();
-    await bot.launch();
-    console.log('Бот запущен!');
+    app.listen(PORT, () => {
+      console.log(`Сервер запущен на порту ${PORT}`);
+    });
   } catch (err) {
-    console.error('Ошибка инициализации бота:', err);
+    console.error('Ошибка инициализации:', err);
   }
 })();
 
