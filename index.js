@@ -7,18 +7,26 @@ const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID);
 
 
 async function authorizeGoogleSheet() {
-   // Аутентификация через google-auth-library JWT
-   const { JWT } = require('google-auth-library');
-   const authClient = new JWT({
-     email: process.env.GOOGLE_CLIENT_EMAIL,
-     key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-     scopes: ['https://www.googleapis.com/auth/spreadsheets']
-   });
-   await authClient.authorize();
-   // Передаём OAuth2-клиент в google-spreadsheet
-   doc.useOAuth2Client(authClient);
-   await doc.loadInfo();
- }
+  const { JWT } = require('google-auth-library');
+  // Читаем ключ, убираем внешние кавычки и CR
+  let key = process.env.GOOGLE_PRIVATE_KEY.trim();
+  if (key.startsWith('"') && key.endsWith('"')) {
+    key = key.slice(1, -1);
+  }
+  key = key.replace(/\r/g, '');
+  // Преобразуем \\n в реальные переводы строк
+  const privateKey = key.replace(/\\n/g, '\n');
+
+  const authClient = new JWT({
+    email: process.env.GOOGLE_CLIENT_EMAIL,
+    key: privateKey,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+  await authClient.authorize();
+  doc.useOAuth2Client(authClient);
+  await doc.loadInfo();
+}
+
 
 // Загрузка викторины
 async function loadQuiz() {
