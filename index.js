@@ -18,30 +18,41 @@ async function authorize() {
   await jwtClient.authorize();
 }
 
-// Загрузка викторины из листа "Вопросы"
+function shuffle(array) {
+  return array
+    .map(value => ({ value, sort: Math.random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .map(({ value }) => value);
+}
+
 async function loadQuiz() {
   const { data } = await sheetsApi.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
     range: 'Вопросы!A1:Z1000',
   });
+
   const rows = data.values || [];
-  if (rows.length < 2) throw new Error('Недостаточно данных в листе "Вопросы"');
+  if (rows.length < 3) throw new Error('Недостаточно строк в листе "Вопросы"');
 
-  const header = rows[0];         // первая строка — тексты вопросов
-  const allAnswers = rows.slice(1); // со второй строки — все варианты
+  const questions = rows[0];     // строка с текстами вопросов
+  const corrects = rows[1];      // строка с правильными вариантами
+  const optionsRows = rows.slice(2); // строки с вариантами
 
-  // считаем, что первая строка из allAnswers (rows[1]) — это правильные ответы
-  const corrects = allAnswers[0];
-  const optionsRows = allAnswers.slice(1);
+  const quiz = questions.map((q, i) => {
+    const allOptions = optionsRows.map(row => row[i]).filter(Boolean);
+    const correct = corrects[i];
 
-  return header.map((q, i) => ({
-    text: q,
-    // собираем все варианты: из rows[2], rows[3] и т.д.
-    options: optionsRows.map(r => r[i]).filter(Boolean),
-    // правильный ответ берём из строки corrects
-    correct: corrects[i] || ''
-  }));
+    const shuffled = shuffle(allOptions);
+    return {
+      text: q,
+      correct: correct,
+      options: shuffled
+    };
+  });
+
+  return shuffle(quiz); // перемешиваем порядок вопросов
 }
+
 
 // Сохранение результатов
 async function saveResults(username, answers, scoreStr) {
