@@ -68,7 +68,7 @@ async function saveResults(username, answers, scoreStr) {
 const sessions = {};
 
 bot.start(ctx => {
-  ctx.reply('Привет! Готов пройти опрос?', Markup.inlineKeyboard([
+  ctx.reply('Викторина ко Дню кадровика: Проверь свои знания в HR!', Markup.inlineKeyboard([
     Markup.button.callback('Начать опрос', 'START')
   ]));
 });
