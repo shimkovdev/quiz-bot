@@ -5,8 +5,6 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID);
 
-console.log('google-spreadsheet version:', require('google-spreadsheet/package.json').version);
-
 
 async function authorizeGoogleSheet() {
   await doc.useServiceAccountAuth({
