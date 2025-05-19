@@ -8,14 +8,10 @@ const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID);
 
 async function authorizeGoogleSheet() {
   const { JWT } = require('google-auth-library');
-  // Читаем ключ, убираем внешние кавычки и CR
   let key = process.env.GOOGLE_PRIVATE_KEY.trim();
-  if (key.startsWith('"') && key.endsWith('"')) {
-    key = key.slice(1, -1);
-  }
+  if (key.startsWith('"') && key.endsWith('"')) key = key.slice(1, -1);
   key = key.replace(/\r/g, '');
-  // Преобразуем \\n в реальные переводы строк
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
+  const privateKey = key.replace(/\\n/g, '\n');
 
   const authClient = new JWT({
     email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -23,10 +19,12 @@ async function authorizeGoogleSheet() {
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   await authClient.authorize();
-  doc.useOAuth2Client(authClient);
+
+  // ← здесь поправка:
+  doc.useAuthClient(authClient);
+
   await doc.loadInfo();
 }
-
 
 // Загрузка викторины
 async function loadQuiz() {
