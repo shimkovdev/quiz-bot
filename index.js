@@ -53,15 +53,18 @@ async function loadQuiz() {
   return shuffle(quiz);
 }
 
-async function saveResults(username, answers, scoreStr) {
+async function saveResults(username, firstName, lastName, answers, scoreStr) {
   await sheetsApi.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
     range: 'Опрос',
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: [[username, ...answers, scoreStr]] },
+    requestBody: {
+      values: [[username, firstName, lastName, ...answers, scoreStr]]
+    },
   });
 }
+
 
 const sessions = {};
 
