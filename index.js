@@ -124,7 +124,9 @@ bot.on('text', async (ctx) => {
   await ctx.reply(summary);
 
   const username = ctx.from.username || userId;
-  await saveResults(username, s.answers, `${score}/${results.length}`);
+  const firstName = ctx.from.first_name || '';
+  const lastName = ctx.from.last_name || '';
+  await saveResults(username, firstName, lastName, s.answers, `${score}/${results.length}`);
   await bot.telegram.sendMessage(
     process.env.RESULTS_CHAT_ID,
     `Пользователь ${username} завершил опрос: ${score}/${results.length}`
